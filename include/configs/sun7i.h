@@ -14,6 +14,7 @@
  */
 #define CONFIG_SUN7I		/* sun7i SoC generation */
 #define CONFIG_CLK_FULL_SPEED		912000000
+#define CONFIG_NET_ETHADDR_EEPROM_I2C_ADDR 0x50
 
 #define CONFIG_SYS_PROMPT		"sun7i# "
 #define CONFIG_MACH_TYPE		4283
@@ -26,5 +27,8 @@
  * Include common sunxi configuration where most the settings are
  */
 #include <configs/sunxi-common.h>
+#undef CONFIG_MISC_INIT_R
+#define CONFIG_MISC_INIT_R  1
+
 
 #endif /* __CONFIG_H */

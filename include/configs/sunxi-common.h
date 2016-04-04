@@ -319,7 +319,11 @@
 /* No CONFIG_SYS_I2C as we use the non converted mvtwsi driver */
 #define CONFIG_HARD_I2C
 #define CONFIG_SYS_I2C_SUNXI
+#ifdef CONFIG_SPL_BUILD
 #define CONFIG_SYS_I2C_SPEED		400000
+#else
+#define CONFIG_SYS_I2C_SPEED		100000
+#endif
 #define CONFIG_SYS_I2C_SLAVE		0x7f
 #define CONFIG_CMD_I2C
 

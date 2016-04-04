@@ -10,8 +10,10 @@
  *
  * SPDX-License-Identifier:	GPL-2.0+
  */
+#define DEBUG
 
 #include <common.h>
+#include <i2c.h>
 #ifdef CONFIG_AXP152_POWER
 #include <axp152.h>
 #endif
@@ -132,9 +134,44 @@ int board_mmc_init(bd_t *bis)
 
 void i2c_init_board(void)
 {
+#ifdef CONFIG_SPL_BUILD
 	sunxi_gpio_set_cfgpin(SUNXI_GPB(0), SUNXI_GPB0_TWI0);
 	sunxi_gpio_set_cfgpin(SUNXI_GPB(1), SUNXI_GPB0_TWI0);
 	clock_twi_onoff(0, 1);
+#else
+	sunxi_gpio_set_cfgpin(SUNXI_GPB(18), SUNXI_GPB0_TWI1);
+	sunxi_gpio_set_cfgpin(SUNXI_GPB(19), SUNXI_GPB0_TWI1);
+	clock_twi_onoff(1, 1);
+#endif
+}
+
+static int read_mac_from_eeprom(uint8_t *mac_addr)
+{
+   uint8_t eeprom[7];
+   int old_i2c_bus;
+
+   old_i2c_bus = i2c_get_bus_num();
+   if (i2c_set_bus_num(CONFIG_NET_ETHADDR_EEPROM_I2C_BUS) != 0) {
+       puts("Invalid bus number\n");
+   }
+   if (i2c_read(CONFIG_NET_ETHADDR_EEPROM_I2C_ADDR,
+            CONFIG_NET_ETHADDR_EEPROM_OFFSET,
+            CONFIG_NET_ETHADDR_EEPROM_I2C_ADDRLEN,
+            eeprom, 7)) {
+       i2c_set_bus_num(old_i2c_bus);
+       puts("Could not read the EEPROM; EEPROM missing?\n");
+       return -1;
+   }
+   i2c_set_bus_num(old_i2c_bus);
+#ifdef CONFIG_NET_ETHADDR_EEPROM_CRC8
+   if (crc8(eeprom, 6) != eeprom[6]) {
+       puts("CRC error on MAC address from EEPROM.\n");
+       return -1;
+   }
+#endif
+   memcpy(mac_addr, eeprom, 6);
+
+   return 0;
 }
 
 #if defined(CONFIG_SPL_BUILD) || defined(CONFIG_SUN6I) || defined(CONFIG_SUN8I)
@@ -216,24 +253,36 @@ void spl_display_print(void)
 #ifdef CONFIG_MISC_INIT_R
 int misc_init_r(void)
 {
+	printf("misc_init_r\n");
+    uint8_t mac_addr[6];
 	if (!getenv("ethaddr")) {
-		uint32_t reg_val = readl(SUNXI_SID_BASE);
+        if (read_mac_from_eeprom(mac_addr)) {
+            uint32_t reg_val = readl(SUNXI_SID_BASE);
 
-		if (reg_val) {
-			uint8_t mac_addr[6];
+            if (reg_val) {
+                mac_addr[0] = 0x02; /* Non OUI / registered MAC address */
+                mac_addr[1] = (reg_val >>  0) & 0xff;
+                reg_val = readl(SUNXI_SID_BASE + 0x0c);
+                mac_addr[2] = (reg_val >> 24) & 0xff;
+                mac_addr[3] = (reg_val >> 16) & 0xff;
+                mac_addr[4] = (reg_val >>  8) & 0xff;
+                mac_addr[5] = (reg_val >>  0) & 0xff;
 
-			mac_addr[0] = 0x02; /* Non OUI / registered MAC address */
-			mac_addr[1] = (reg_val >>  0) & 0xff;
-			reg_val = readl(SUNXI_SID_BASE + 0x0c);
-			mac_addr[2] = (reg_val >> 24) & 0xff;
-			mac_addr[3] = (reg_val >> 16) & 0xff;
-			mac_addr[4] = (reg_val >>  8) & 0xff;
-			mac_addr[5] = (reg_val >>  0) & 0xff;
-
-			eth_setenv_enetaddr("ethaddr", mac_addr);
-		}
+                eth_setenv_enetaddr("ethaddr", mac_addr);
+                printf("using random mac: %02x:%02x:%02x:%02x:%02x:%02x\n",
+                       mac_addr[0], mac_addr[1], mac_addr[2],
+                       mac_addr[3], mac_addr[4], mac_addr[5]);
+            }
+        } else {
+            printf("read mac: %02x:%02x:%02x:%02x:%02x:%02x\n",
+                   mac_addr[0], mac_addr[1], mac_addr[2],
+                   mac_addr[3], mac_addr[4], mac_addr[5]);
+            eth_setenv_enetaddr("ethaddr", mac_addr);
+        }
 	}
 
 	return 0;
 }
+#else
+#error misc_init_r not defined
 #endif
