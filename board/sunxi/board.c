@@ -38,6 +38,11 @@ int board_init(void)
 {
 	int id_pfr1;
 
+    if (axp209_poweron_by_dc()) {
+        axp209_poweroff();
+        return 0; // should be dead by now
+    }
+
 	gd->bd->bi_boot_params = (PHYS_SDRAM_0 + 0x100);
 
 	asm volatile("mrc p15, 0, %0, c0, c1, 1" : "=r"(id_pfr1));
@@ -139,8 +144,8 @@ void i2c_init_board(void)
 	sunxi_gpio_set_cfgpin(SUNXI_GPB(1), SUNXI_GPB0_TWI0);
 	clock_twi_onoff(0, 1);
 #else
-	sunxi_gpio_set_cfgpin(SUNXI_GPB(18), SUNXI_GPB0_TWI1);
-	sunxi_gpio_set_cfgpin(SUNXI_GPB(19), SUNXI_GPB0_TWI1);
+	sunxi_gpio_set_cfgpin(SUNXI_GPB(18), SUNXI_GPB0_TWI0);
+	sunxi_gpio_set_cfgpin(SUNXI_GPB(19), SUNXI_GPB0_TWI0);
 	clock_twi_onoff(1, 1);
 #endif
 }
