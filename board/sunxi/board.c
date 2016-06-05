@@ -30,8 +30,39 @@
 #include <asm/arch/mmc.h>
 #include <asm/io.h>
 #include <net.h>
+#include <asm/gpio.h>
 
 DECLARE_GLOBAL_DATA_PTR;
+
+#if defined(CONFIG_FREESTYLE) && !defined(CONFIG_SPL_BUILD)
+void freestyle_led_init(void) {
+    int pin = sunxi_name_to_gpio("PG2");
+
+	printf("FREESTYLE_LED_CONFIG: PG2: %d\n", pin);
+
+        // all these are on the PG bank so just increment pin
+    gpio_direction_output(pin, SUNXI_GPIO_OUTPUT);
+    gpio_set_value(pin++, 0); //PG02
+    gpio_direction_output(pin, SUNXI_GPIO_OUTPUT);
+    gpio_set_value(pin++, 0); //PG03
+    gpio_direction_output(pin, SUNXI_GPIO_OUTPUT);
+    gpio_set_value(pin++, 0); //PG04
+    gpio_direction_output(pin, SUNXI_GPIO_OUTPUT);
+    gpio_set_value(pin++, 0); //PG05
+    gpio_direction_output(pin, SUNXI_GPIO_OUTPUT);
+    gpio_set_value(pin++, 0);
+    gpio_direction_output(pin, SUNXI_GPIO_OUTPUT);
+    gpio_set_value(pin++, 0);
+    gpio_direction_output(pin, SUNXI_GPIO_OUTPUT);
+    gpio_set_value(pin++, 0);
+    gpio_direction_output(pin, SUNXI_GPIO_OUTPUT);
+    gpio_set_value(pin++, 0);
+
+    pin = sunxi_name_to_gpio("PG10");
+    gpio_direction_output(pin, SUNXI_GPIO_OUTPUT);
+    gpio_set_value(pin, 0);
+}
+#endif
 
 /* add board specific code here */
 int board_init(void)
@@ -57,6 +88,11 @@ int board_init(void)
 #ifdef CONFIG_STATUS_LED
 	status_led_set(STATUS_LED_BOOT, STATUS_LED_ON);
 #endif
+
+#if defined(CONFIG_FREESTYLE) && !defined(CONFIG_SPL_BUILD)
+    freestyle_led_init();
+#endif
+
 	return 0;
 }
 
@@ -152,8 +188,9 @@ void i2c_init_board(void)
 
 static int read_mac_from_eeprom(uint8_t *mac_addr)
 {
-   uint8_t eeprom[7];
+   uint8_t eeprom[12];
    int old_i2c_bus;
+   int i;
 
    old_i2c_bus = i2c_get_bus_num();
    if (i2c_set_bus_num(CONFIG_NET_ETHADDR_EEPROM_I2C_BUS) != 0) {
@@ -162,12 +199,19 @@ static int read_mac_from_eeprom(uint8_t *mac_addr)
    if (i2c_read(CONFIG_NET_ETHADDR_EEPROM_I2C_ADDR,
             CONFIG_NET_ETHADDR_EEPROM_OFFSET,
             CONFIG_NET_ETHADDR_EEPROM_I2C_ADDRLEN,
-            eeprom, 7)) {
+            eeprom, 12)) {
        i2c_set_bus_num(old_i2c_bus);
        puts("Could not read the EEPROM; EEPROM missing?\n");
        return -1;
    }
    i2c_set_bus_num(old_i2c_bus);
+   
+   for (i=0; i<6; i++) {
+       if (eeprom[i] != eeprom[11-i]) {
+           puts("Match error MAC address from EEPROM.\n");
+           return -1;
+       }
+   }
 #ifdef CONFIG_NET_ETHADDR_EEPROM_CRC8
    if (crc8(eeprom, 6) != eeprom[6]) {
        puts("CRC error on MAC address from EEPROM.\n");
@@ -255,7 +299,7 @@ void spl_display_print(void)
 }
 #endif
 
-#ifdef CONFIG_MISC_INIT_R
+#if defined(CONFIG_MISC_INIT_R)
 int misc_init_r(void)
 {
 	printf("misc_init_r\n");
